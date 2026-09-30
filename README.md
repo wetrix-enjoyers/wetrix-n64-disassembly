@@ -183,4 +183,4 @@ MIT (`LICENSE`, Copyright (c) 2026 Wetrix Enjoyers). That covers the tools and c
 this repository. The game is not part of it: the ROM and everything derived from it
 (`asm/`, `assets/`, the ELF) stay out of the repository.
 
-See `NOTICE.md` for the one file whose origin is not recorded (`include/macro.inc`).
+`include/` is written by splat on each split and is not part of the repository; see `NOTICE.md`.

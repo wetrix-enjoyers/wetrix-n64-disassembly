@@ -16,6 +16,10 @@
 .splache
 .ninja*
 
+# splat writes these into include/ on every split (macro.inc, labels.inc,
+# include_asm.h): the assembler macros the generated asm includes.
+/include/
+
 # splat's own bookkeeping.
 .splat/
 expected/
