@@ -1,0 +1,192 @@
+// libultra functions this ROM contains, and only those.
+//
+// N64Recomp decides what to hand to N64ModernRuntime **by name**. A function
+// whose symbol is `osAiSetFrequency` is on its reimplemented list and its ROM
+// body is dropped in favour of the runtime's; the same bytes under the name
+// `func_8004F540` are recompiled instruction by instruction, and then either
+// fault at run time (a memory-mapped access is translated by the MEM_* macros
+// into an offset from rdram and lands past the end of the 8 MB allocation) or
+// fail the build outright (a COP0 access has no MEM_* form at all, and
+// N64Recomp models exactly one COP0 register, Status).
+//
+// These entries were derived by reading each function, not copied from another
+// project's map. For this class of function the name is not a judgement call:
+// the hardware block it addresses and the width of the access are the identity.
+// `lui 0xA450; lw 4(rX)` is a read of AI_LEN and can only be osAiGetLength;
+// `mtc0 r4, cop0[11]` can only be __osSetCompare. tools/find_hardware_funcs.py
+// prints the fingerprint of every function that touches hardware, and
+// tools/check_libultra_names.py checks each name against the vocabulary
+// N64Recomp actually implements -- a correct name it does not know buys nothing.
+//
+// Entries are deliberately omitted where they would not help: hardware-touching
+// functions that N64Recomp has no implementation for stay unnamed here and are
+// listed as work in the README, because renaming them would change nothing and
+// the port has to replace them instead.
+
+// --- COP0 ------------------------------------------------------------------
+// N64Recomp models COP0 register 12 (Status) only; everything else here is a
+// build failure until the function is named.
+__osGetSR               = 0x80011254; // type:func  mfc0 r2, cop0[12]
+__osRestoreInt          = 0x80051560; // type:func  mfc0/mtc0 cop0[12]
+__osSetCompare          = 0x80060A00; // type:func  mtc0 r4, cop0[11]
+
+// --- Audio interface (0xA450) ----------------------------------------------
+osAiGetLength           = 0x8004F500; // type:func  lw  AI_LEN (0x04)
+osAiSetFrequency        = 0x8004F540; // type:func  sw  AI_DACRATE (0x10), AI_BITRATE (0x14)
+osAiSetNextBuffer       = 0x8004F6C0; // type:func  sw  AI_DRAM_ADDR (0x00), AI_LEN (0x04)
+__osAiDeviceBusy        = 0x8004F780; // type:func  lw  AI_STATUS (0x0C)
+
+// --- Video interface (0xA440) ----------------------------------------------
+__osViInit              = 0x80060B80; // type:func  VI_CTRL (0x00), VI_ORIGIN (0x04)
+__osViSwapContext       = 0x80061580; // type:func
+
+// --- Display processor (0xA410) --------------------------------------------
+osDpSetNextBuffer       = 0x8005AB40; // type:func  DP_START (0x00), DP_END (0x04)
+__osDpDeviceBusy        = 0x8005AC00; // type:func  lw  DPC_STATUS (0x0C)
+osDpSetStatus           = 0x8005AC30; // type:func  sw  DPC_STATUS (0x0C)
+
+// --- MIPS interface (0xA430) -----------------------------------------------
+osSetIntMask            = 0x8005AF00; // type:func  mfc0 cop0[12], MI_INTR_MASK (0x0C)
+
+// --- Parallel interface (0xA460) -------------------------------------------
+// osPiStartDma is the one that mattered. It is the high-level entry point the
+// boot path waits on, and it was left unnamed here at first, so its ROM body was
+// recompiled: it wrote PI registers that do not exist on the host, the completion
+// message the caller was blocked on never arrived, and the port booted to a black
+// screen with every thread parked and no crash to point at. Both of the DMA
+// entry points are answered by the runtime (librecomp/src/pi.cpp).
+osEPiStartDma           = 0x80050F80; // type:func
+osPiStartDma            = 0x80059040; // type:func
+osEPiRawStartDma        = 0x800520C0; // type:func  PI_DRAM_ADDR (0x00), PI_CART_ADDR (0x04)
+osPiRawStartDma         = 0x80059A40; // type:func  PI_DRAM_ADDR (0x00), PI_CART_ADDR (0x04)
+osPiRawReadIo           = 0x80059B40; // type:func
+
+// --- Serial interface (0xA480) ---------------------------------------------
+__osSiRawStartDma       = 0x8005B4C0; // type:func  SI_DRAM_ADDR (0x00), SI_PIF_ADDR_RD64B (0x04)
+__osSiDeviceBusy        = 0x8005B580; // type:func  lw  SI_STATUS (0x18)
+
+// --- Signal processor (0xA404, 0xA408) ------------------------------------
+__osSpDeviceBusy        = 0x8005BE40; // type:func  lw  SP_STATUS (0x10)
+__osSpRawStartDma       = 0x8005BE80; // type:func  SP_MEM_ADDR (0x00), SP_DRAM_ADDR (0x04)
+__osSpSetPc             = 0x8005BF40; // type:func  SP_PC (0xA408)
+__osSpSetStatus         = 0x8005BF80; // type:func  sw  SP_STATUS (0x10)
+__osSpGetStatus         = 0x8005C080; // type:func  lw  SP_STATUS (0x10)
+
+// --- Runtime internals ------------------------------------------------------
+// Named because the runtime implements them, not because they touch hardware.
+// __osExceptionPreamble is entered from the exception vector: it reads Cause,
+// EPC and Status and touches MI_INTR.
+__osExceptionPreamble   = 0x80050640; // type:func
+__osDispatchThread      = 0x80050DC4; // type:func  mtc0 cop0[12]
+osJamMesg               = 0x800516C0; // type:func
+
+// --- SDK routines the host already implements -------------------------------
+// A second reason to name a function, and the more important one. N64Recomp
+// hands a function to the host *by name*, and the host already has an
+// implementation for each of these: either the runtime's libultra translation
+// or this port's own shims (port/src/replaced_funcs.cpp). Naming them drops the
+// ROM body from recompilation and routes every caller to that implementation.
+//
+// Leaving one unnamed is not neutral, because the rule cuts both ways. A
+// recompiled body calls its callees, and when a callee is an SDK routine the
+// call is renamed to `X_recomp` -- so an unnamed *caller* of a named function is
+// a link error, not a silent fallback. That is what this list exists to settle:
+// name every function the host implements, and leave unnamed every function it
+// does not, because a name with no implementation behind it only moves the
+// failure. tools/find_hardware_funcs.py reports the hardware end of this;
+// tools/check_libultra_names.py reports whether a name has anything behind it.
+//
+// The addresses were read, not assumed. osSpTaskLoad sets SP_STATUS, sets the
+// RSP PC to 0x4001000 with a retry loop around each write, and DMAs the 0x40-byte
+// task copy to DMEM 0xFC0 and the microcode text to IMEM 0x1000 -- which is also
+// what port/src/main.cpp reasons about, in its comment on the audio command
+// window. __osTimerInterrupt walks the timer queue at D_8007B300 and, when it
+// empties, zeroes COMPARE and the time base at D_800856F0.
+//
+// Threads and managers.
+osCreateThread          = 0x800503C0; // type:func
+__osPopThread           = 0x80050DB4; // type:func
+__osDequeueThread       = 0x800605C0; // type:func
+osStartThread           = 0x8005C100; // type:func
+osCreatePiManager       = 0x800591C0; // type:func
+osCreateViManager       = 0x80060D40; // type:func
+osSetEventMesg          = 0x8005ADC0; // type:func
+
+// Sound and video interface.
+osSpTaskLoad            = 0x8005B91C; // type:func
+osSpTaskStartGo         = 0x8005BAAC; // type:func
+osSpTaskYield           = 0x8005BFC0; // type:func
+osSpTaskYielded         = 0x8005C000; // type:func
+osViBlack               = 0x80060B00; // type:func
+osViGetCurrentFramebuffer = 0x80060CC0; // type:func
+osViGetNextFramebuffer = 0x80060D00; // type:func
+osViSetMode             = 0x80061100; // type:func
+osViSwapBuffer          = 0x80061500; // type:func
+
+// Timers. The port supplies __osTimerInterrupt itself because it owns the timer
+// model; see the osGetCount patch in the port's wetrix.toml.
+__osTimerInterrupt      = 0x8006068C; // type:func
+
+// Controller pak. The game reads and writes the pak through these, and the port
+// shims every one of them, so they must not be recompiled.
+__osContRamWrite        = 0x80053940; // type:func
+__osRepairPackId        = 0x80055204; // type:func
+__osCheckPackId         = 0x8005561C; // type:func
+__osPfsRWInode          = 0x80055B0C; // type:func
+__osPfsGetStatus        = 0x80057400; // type:func
+osPfsAllocateFile       = 0x80054980; // type:func
+osPfsFileState          = 0x80056F80; // type:func
+osPfsInitPak            = 0x80057540; // type:func
+osPfsNumFiles           = 0x80057B40; // type:func
+osPfsReadWriteFile      = 0x80057DBC; // type:func
+
+// 64-bit arithmetic, from the runtime's integer helpers.
+__ll_mul                = 0x80052568; // type:func
+
+// --- The rest of the SDK surface the host implements ------------------------
+// Same rule as the block above, applied to everything the runtime's libultra
+// translation or this port's shims already provide. Each of these is a function
+// whose ROM body would otherwise be recompiled into a second, host-blind copy:
+// osInitialize's copies the boot segment table, osGetTime's reads the R4300
+// count register through the osGetCount patch below, and osSendMesg/osRecvMesg
+// drive the emulated thread queues the port already owns.
+//
+// The table is now split by capability rather than by convenience: every name
+// here has an implementation behind it, and the functions that do *not* --
+// __osSpRawReadIo, __osSpRawWriteIo, __osSetTimerIntr, __osInsertTimer and the
+// rest of the R4300 timer and RSP register plumbing -- are deliberately left
+// unnamed so they are recompiled, because nothing would answer for them. Where
+// those come out calling a named function, the port supplies the callee
+// instead; see __osSiDeviceBusy_recomp in port/src/ultra_shims.cpp.
+osContStartReadData         = 0x8004FBC0; // type:func
+osContGetReadData           = 0x8004FC84; // type:func
+osContInit                  = 0x8004FE40; // type:func
+osCreateMesgQueue           = 0x80050380; // type:func
+osDestroyThread             = 0x80050540; // type:func
+osGetTime                   = 0x80051080; // type:func
+osInitialize                = 0x80051240; // type:func
+__ull_rem                   = 0x8005242C; // type:func
+__ull_div                   = 0x80052468; // type:func
+__ll_lshift                 = 0x800524A4; // type:func
+__ll_div                    = 0x8005250C; // type:func
+osMotorStop                 = 0x80052F40; // type:func
+osMotorStart                = 0x800530A8; // type:func
+osMotorInit                 = 0x80053390; // type:func
+__osContRamRead             = 0x80053580; // type:func
+__osContAddressCrc          = 0x80053CC0; // type:func
+__osContDataCrc             = 0x80053D70; // type:func
+__osCheckId                 = 0x80055A10; // type:func
+__osPfsSelectBank           = 0x80055E2C; // type:func
+osPfsChecker                = 0x80055EC0; // type:func
+osPfsDeleteFile             = 0x80056940; // type:func
+osPfsFreeBlocks             = 0x80057280; // type:func
+osPfsIsPlug                 = 0x800577C0; // type:func
+osPfsFindFile               = 0x80058E80; // type:func
+osRecvMesg                  = 0x80059BC0; // type:func
+osSendMesg                  = 0x8005AC40; // type:func
+osSetThreadPri              = 0x8005B000; // type:func
+osSetTimer                  = 0x8005B140; // type:func
+osVirtualToPhysical         = 0x80061180; // type:func
+osViSetEvent                = 0x800612C0; // type:func
+osViSetSpecialFeatures      = 0x80061340; // type:func
+osYieldThread               = 0x800635C0; // type:func

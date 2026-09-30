@@ -1,0 +1,27 @@
+# MIPS cross-binutils for assembling the Wetrix splat output.
+#
+# splat's include/macro.inc is written for GNU as, so we need real GNU
+# binutils rather than the host LLVM assembler. There is no native Windows
+# build of binutils-mips-linux-gnu, so we run the assembler in a container
+# instead.
+#
+# Build:  docker build -t wetrix-mips -f tools/Dockerfile.mips tools
+# Use:    docker run --rm -v ".:/work" -w /work wetrix-mips mips-linux-gnu-as --version
+
+FROM ubuntu:24.04
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      binutils-mips-linux-gnu \
+      python3 \
+      build-essential cmake ninja-build git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# Sanity-check the toolchain at build time so a broken image fails loudly here
+# rather than halfway through a 144-file assembly pass.
+RUN mips-linux-gnu-as --version \
+ && mips-linux-gnu-ld --version \
+ && mips-linux-gnu-objcopy --version \
+ && python3 --version
+
+WORKDIR /work

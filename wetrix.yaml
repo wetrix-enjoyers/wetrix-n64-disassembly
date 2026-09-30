@@ -1,0 +1,131 @@
+name: Wetrix (North America)
+sha1: 6e40312cf88a9182e93b396b9d82457b1aba7cd6
+options:
+  basename: wetrix
+  target_path: baserom.z64
+  elf_path: build/wetrix.elf
+  base_path: .
+  platform: n64
+  # This is not what splat detects (it guesses KMC) and not what the ROM header
+  # claims. It is the compiler the game was actually built with.
+  compiler: SN64
+
+  # asm_path: asm
+  # src_path: src
+  # build_path: build
+  # create_asm_dependencies: True
+
+  ld_script_path: build/wetrix.ld
+  ld_dependencies: True
+
+  find_file_boundaries: True
+  header_encoding: ASCII
+
+  o_as_suffix: True
+  use_legacy_include_asm: False
+  mips_abi_float_regs: o32
+
+  # The main segment keeps its read-only data *before* its code. Left unset, the
+  # link script emits .text first and every code and data address comes out
+  # 0xDA00 too high.
+  section_order: [".rodata", ".text", ".data", ".bss"]
+
+  symbol_addrs_path:
+    - config/us/symbol_addrs.txt
+    # The libultra functions this ROM contains. These are load-bearing rather
+    # than cosmetic: N64Recomp decides what to hand to the runtime by name, so a
+    # hardware accessor left as `func_XXXXXXXX` is recompiled instead of
+    # replaced, and then either faults on the access or fails the build.
+    - config/us/symbol_addrs_libultra.txt
+  reloc_addrs_path:
+    - reloc_addrs.txt
+
+  # undefined_funcs_auto_path: undefined_funcs_auto.txt
+  # undefined_syms_auto_path: undefined_syms_auto.txt
+
+  extensions_path: tools/splat_ext
+
+  # string_encoding: ASCII
+  # data_string_encoding: ASCII
+  rodata_string_guesser_level: 2
+  data_string_guesser_level: 2
+  # libultra_symbols: True
+  # hardware_regs: True
+  gfx_ucode: f3dex
+segments:
+  - name: header
+    type: header
+    start: 0x0
+
+  - name: ipl3
+    type: bin
+    start: 0x40
+
+  # splat warns that this ROM's entrypoint is non-traditional and that its own
+  # analysis of this segment may be wrong, and it is: it reads the header's first
+  # segment as 0xDA20 bytes, which would land main at 0xEA20. The entry is the
+  # 0x40 bytes here and main begins immediately after it.
+  - name: entry
+    type: code
+    start: 0x1000
+    vram: 0x80000400
+    subsegments:
+      - [0x1000, hasm]
+
+  - name: main
+    type: code
+    start: 0x1040
+    vram: 0x80000440
+    follows_vram: entry
+    bss_size: 0xAFCC0
+    # Every subsegment offset in this segment is 8-byte aligned, but splat
+    # defaults align and subalign to 0x10, which pads the small blobs and shifts
+    # every later address.
+    align: 8
+    subalign: 8
+    # Read-only data, then code, then initialised data, all in the main segment.
+    #
+    # The first and last entries are the structure. The code entry is cut at the
+    # boundaries between the SDK's code units, and that is not cosmetic: given
+    # one 350 KB code block splat analyses it linearly and derails partway
+    # through, folding runs of functions into a neighbour's extent. The map is
+    # the deliverable, so a folded function is a *missing* function -- N64Recomp
+    # never recompiles it and nothing can resolve a pointer to it. Two thirds of
+    # the ROM's functions live on the far side of a derail.
+    #
+    # Measured on this ROM with the pinned tools, rebuilding the ELF and running
+    # tools/verify_elf.py for each:
+    #
+    #     - [0xEA40, asm] alone                 642 functions, reassembles
+    #     + 0x10DC0                             996 functions, reassembles
+    #     + the eight cuts below                997 functions, reassembles
+    #     + cuts from fusion detection (192)    979 functions, does NOT reassemble
+    #
+    # That last line is why this list is hand-checked rather than generated. A
+    # cut is only safe when it leaves the bytes splat emits for every address
+    # unchanged, and a fused function's own start usually is not such a point.
+    # tools/split_code_units.py reports where the fusions are; verify_elf.py is
+    # what decides whether a cut may stay.
+    subsegments:
+      - [0x1040, rodata]
+      - [0xEA40, asm]
+      - [0x10DC0, asm]
+      - [0x11D00, asm]
+      - [0x12580, asm]
+      - [0x50110, asm]
+      - [0x50370, asm]
+      - [0x506F0, asm]
+      - [0x507A0, asm]
+      - [0x507B0, asm]
+      - [0x64900, data]
+      - [0x7CF80, bss]
+
+  - name: rom_data
+    type: bin
+    start: 0x7CF80
+
+  - name: sound_things
+    type: bin
+    start: 0x47DE80
+
+  - [0x800000]

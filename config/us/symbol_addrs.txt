@@ -1,0 +1,55 @@
+// Visit https://github.com/ethteck/splat/wiki/Adding-Symbols for documentation about this file
+entrypoint = 0x80000400; // type:func
+main = 0x80031DC0; // type:func
+
+// ---------------------------------------------------------------------------
+// These ten are interior points of routines the runtime provides, not entry
+// points of their own. splat promoted them because something jumps to them, and
+// that is not the same thing: they carry no prologue, they read registers the
+// code around them is still holding (0x80050AEC and 0x80050D2C both feed `$26`,
+// the exception handler's k0), and two of them end by jumping straight into
+// __osDispatchThread rather than returning. They are tails and branch
+// destinations *inside* __osExceptionPreamble, __osDispatchThread,
+// osInitialize, __osContRamRead, __osContRamWrite and func_8005DE44.
+//
+// Calling them functions costs more than a wrong symbol name. N64Recomp drops
+// the body of a function it knows the runtime implements, so while these bytes
+// sit inside `__osExceptionPreamble` they are never recompiled; cut out into
+// functions of their own they are, and then the build stops on `mfc0 $8` --
+// N64Recomp models exactly one COP0 register, Status (12), and these are
+// exception and coprocessor plumbing. Declaring them labels puts them back
+// where the disassembly found them, as names for code that is already covered.
+// tools/check_libultra_names.py --divergence re-measures the list.
+// ---------------------------------------------------------------------------
+func_80050AEC = 0x80050AEC; // type:label
+func_80050C6C = 0x80050C6C; // type:label
+func_80050D2C = 0x80050D2C; // type:label
+func_80050E2C = 0x80050E2C; // type:label
+func_80051380 = 0x80051380; // type:label
+func_800513E0 = 0x800513E0; // type:label
+func_80051620 = 0x80051620; // type:label
+func_80053640 = 0x80053640; // type:label
+func_80053A00 = 0x80053A00; // type:label
+func_8005DF04 = 0x8005DF04; // type:label
+
+// ---------------------------------------------------------------------------
+// func_8005AA40 is the second half of the ROM's osCreateScheduler
+// (0x8005AA10), cut off by splat because a dead copy of the same scheduler
+// setup, at 0x8001BA10, `jal`s that address. It carries no prologue -- it
+// writes the OSSched it is handed -- and its epilogue restores exactly the frame
+// the first half opened, so on its own it is not a function at all: reached as
+// one, the first half falls off its end and returns, and this half never runs.
+//
+// What is in it is the whole scheduler: two message queues, osCreateViManager,
+// the SP, DP and PRENMI event registrations, osViSetEvent, and osCreateThread
+// for the ROM's own scheduler thread (id 4, priority 127, entry 0x8005A704).
+// Without it nothing ever posts to a scheduler client queue, the game's logic
+// thread waits on that queue for the rest of the run, and the port sits at a
+// black screen with every thread parked and no crash to report.
+//
+// This boundary is real in the ELF -- splat's `jal` target made it a function
+// symbol -- so the widening in the port's wetrix.toml cannot absorb it until the
+// symbol stops claiming a body. Declaring it a label does that; the matching
+// function_sizes entry (func_8005AA10, 0x12C bytes) is the other half.
+// ---------------------------------------------------------------------------
+func_8005AA40 = 0x8005AA40; // type:label

@@ -1,0 +1,31 @@
+# Nothing ROM-derived belongs in this repository. The ROM itself, the assets
+# pulled out of it, the disassembly splat emits, and the ELF we build from them
+# are all reproducible from a legally obtained baserom.z64. None of them is a
+# source of truth, and all of them are Nintendo's data rather than ours.
+*.z64
+*.bin
+/assets/
+/asm/
+/build/
+*.elf
+*.ld
+*.map
+*.o
+*.d
+*.out
+.splache
+.ninja*
+
+# splat's own bookkeeping.
+.splat/
+expected/
+nonmatchings/
+*undefined_funcs_auto.txt
+*undefined_syms_auto.txt
+
+# The Python environment splat runs in.
+__pycache__/
+venv/
+.venv/
+
+.vscode/

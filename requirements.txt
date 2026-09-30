@@ -1,0 +1,8 @@
+# The ROM splitter and the disassembler it drives.
+#
+# splat64 splits the ROM according to wetrix.yaml and emits the assembly that
+# tools/build_elf.py reassembles into the ELF N64Recomp reads. Pinned exactly:
+# a new splat release changes how segments are labelled, which silently changes
+# every generated function name, and the port's config refers to those names.
+splat64[mips]==0.41.1
+spimdisasm==1.42.2
